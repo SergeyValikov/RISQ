@@ -33,44 +33,52 @@ CONTRACT_TYPES = ["Договор оказания услуг"]
 
 
 def _render_report_context(report: Report) -> dict:
-    # report.cover.analysis_date используется в шаблоне
+    """
+    Контекст для HTML / PDF отчёта
+    """
     return {
         "report": report,
         "analysis_date": report.cover.analysis_date,
+        "text_chars": getattr(report.cover, "chars", None),
+        "text_words": getattr(report.cover, "words", None),
     }
 
 
 def _run_analysis(job_id: str, contract_type: str, file_path: Path) -> None:
+    """
+    Фоновая задача анализа договора
+    """
     try:
         storage.set_status(job_id, "processing", "Извлечение текста…")
 
+        # 1. Парсим документ
         text, pages = parse_document(file_path)
 
-        # Страховка: страницы не должны быть 0
-        pages = int(pages) if pages else 1
+        # 2. Считаем объём текста
+        text_chars = len(text)
+        text_words = len(text.split())
 
-        # Страховка: если текст пустой — честно показываем ошибку
-        if not text or not text.strip():
-            raise ValueError(
-                "Не удалось извлечь текст из файла. "
-                "Проверь, что это текстовый PDF или DOCX (не скан-картинка)."
-            )
-
-        storage.set_status(job_id, "processing", "Анализ…")
+        # 3. Анализ
+        storage.set_status(job_id, "processing", "Анализ структуры…")
         report = analyze_contract(contract_type, text, pages)
 
+        # 4. Прокидываем объём текста в отчёт
+        try:
+            report.cover.chars = text_chars
+            report.cover.words = text_words
+        except Exception:
+            pass
+
+        # 5. Сохраняем результат
         storage.set_status(job_id, "processing", "Формирование отчёта…")
         storage.set_report(job_id, report)
 
-    except Exception as exc:  # noqa: BLE001 - surface error in UI
-        storage.set_status(job_id, "error", "Ошибка", str(exc))
+    except Exception as exc:
+        storage.set_status(job_id, "error", "Ошибка анализа", str(exc))
+
     finally:
-        try:
-            if file_path.exists():
-                file_path.unlink(missing_ok=True)
-        except Exception:
-            # Не валим процесс из-за удаления временного файла
-            pass
+        if file_path.exists():
+            file_path.unlink(missing_ok=True)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -82,7 +90,10 @@ async def index(request: Request) -> Response:
 async def upload(request: Request) -> Response:
     return templates.TemplateResponse(
         "upload.html",
-        {"request": request, "contract_types": CONTRACT_TYPES},
+        {
+            "request": request,
+            "contract_types": CONTRACT_TYPES,
+        },
     )
 
 
@@ -100,14 +111,6 @@ async def analyze(
 
     suffix = Path(file.filename).suffix.lower()
 
-    # Разрешаем только то, что реально умеем читать
-    if suffix not in {".pdf", ".docx"}:
-        raise HTTPException(
-            status_code=400,
-            detail="Неподдерживаемый формат. Поддерживаются: PDF, DOCX.",
-        )
-
-    # Сохраняем во временный файл
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         content = await file.read()
         tmp.write(content)
@@ -124,6 +127,7 @@ async def analyzing(request: Request, job_id: str) -> Response:
     job = storage.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Задача не найдена")
+
     return templates.TemplateResponse(
         "analyzing.html",
         {"request": request, "job_id": job_id},
@@ -135,11 +139,13 @@ async def report(request: Request, job_id: str) -> Response:
     job = storage.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Задача не найдена")
+
     if job.status != "done" or not job.report:
         raise HTTPException(status_code=409, detail="Отчёт ещё не готов")
 
     context = _render_report_context(job.report)
     context.update({"request": request, "job_id": job_id})
+
     return templates.TemplateResponse("report.html", context)
 
 
@@ -151,8 +157,15 @@ async def report_pdf(job_id: str) -> Response:
 
     context = _render_report_context(job.report)
     pdf_bytes = pdf_renderer.render("report.html", context)
-    headers = {"Content-Disposition": f"attachment; filename=risq-report-{job_id}.pdf"}
-    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+    headers = {
+        "Content-Disposition": f"attachment; filename=risq-report-{job_id}.pdf"
+    }
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers=headers,
+    )
 
 
 @app.get("/api/job/{job_id}")
@@ -161,7 +174,10 @@ async def api_job(job_id: str) -> JSONResponse:
     if not job:
         raise HTTPException(status_code=404, detail="Задача не найдена")
 
-    payload = {"status": job.status, "step": job.step}
+    payload = {
+        "status": job.status,
+        "step": job.step,
+    }
     if job.error:
         payload["error"] = job.error
 
