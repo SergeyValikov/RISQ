@@ -9,14 +9,17 @@
     <div class="muted" style="display:flex; gap:18px; flex-wrap:wrap;">
       <div>Дата анализа: <b>{{ report.cover.analysis_date }}</b></div>
 
-      {# Страницы показываем только если это реально число (для PDF) #}
-      {% if report.cover.pages %}
+      {# Страницы показываем только если есть реальное число (обычно для PDF) #}
+      {% if report.cover.pages and report.cover.pages >= 2 %}
         <div>Страниц: <b>{{ report.cover.pages }}</b></div>
       {% endif %}
 
-      {# Если ты добавишь chars в cover — это начнёт отображаться автоматически #}
+      {# Объём текста (символы/слова) — появится когда мы добавим эти поля в report.cover #}
       {% if report.cover.chars %}
         <div>Символов: <b>{{ report.cover.chars }}</b></div>
+      {% endif %}
+      {% if report.cover.words %}
+        <div>Слов: <b>{{ report.cover.words }}</b></div>
       {% endif %}
     </div>
   </div>
@@ -89,12 +92,7 @@
   {% if report.contradictions %}
     <ul>
       {% for item in report.contradictions %}
-        <li>
-          {{ item.description }}
-          {% if item.clause_refs %}
-            <span class="muted">({{ item.clause_refs | join(", ") }})</span>
-          {% endif %}
-        </li>
+        <li>{{ item.description }}{% if item.clause_refs %} <span class="muted">({{ item.clause_refs | join(", ") }})</span>{% endif %}</li>
       {% endfor %}
     </ul>
   {% else %}
@@ -118,12 +116,7 @@
   {% if report.needs_specialist %}
     <ul>
       {% for item in report.needs_specialist %}
-        <li>
-          {{ item.item }}
-          {% if item.clause_ref %}
-            <span class="muted">({{ item.clause_ref }})</span>
-          {% endif %}
-        </li>
+        <li>{{ item.item }}{% if item.clause_ref %} <span class="muted">({{ item.clause_ref }})</span>{% endif %}</li>
       {% endfor %}
     </ul>
   {% else %}
@@ -149,4 +142,3 @@
 </div>
 
 {% endblock %}
-
