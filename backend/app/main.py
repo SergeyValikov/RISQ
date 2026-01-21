@@ -33,6 +33,7 @@ CONTRACT_TYPES = ["Договор оказания услуг"]
 
 
 def _render_report_context(report: Report) -> dict:
+    # report.cover.analysis_date используется в шаблоне
     return {
         "report": report,
         "analysis_date": report.cover.analysis_date,
@@ -42,17 +43,34 @@ def _render_report_context(report: Report) -> dict:
 def _run_analysis(job_id: str, contract_type: str, file_path: Path) -> None:
     try:
         storage.set_status(job_id, "processing", "Извлечение текста…")
+
         text, pages = parse_document(file_path)
-        pages = pages or 1
-        storage.set_status(job_id, "processing", "Анализ структуры…")
+
+        # Страховка: страницы не должны быть 0
+        pages = int(pages) if pages else 1
+
+        # Страховка: если текст пустой — честно показываем ошибку
+        if not text or not text.strip():
+            raise ValueError(
+                "Не удалось извлечь текст из файла. "
+                "Проверь, что это текстовый PDF или DOCX (не скан-картинка)."
+            )
+
+        storage.set_status(job_id, "processing", "Анализ…")
         report = analyze_contract(contract_type, text, pages)
+
         storage.set_status(job_id, "processing", "Формирование отчёта…")
         storage.set_report(job_id, report)
+
     except Exception as exc:  # noqa: BLE001 - surface error in UI
         storage.set_status(job_id, "error", "Ошибка", str(exc))
     finally:
-        if file_path.exists():
-            file_path.unlink(missing_ok=True)
+        try:
+            if file_path.exists():
+                file_path.unlink(missing_ok=True)
+        except Exception:
+            # Не валим процесс из-за удаления временного файла
+            pass
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -64,10 +82,7 @@ async def index(request: Request) -> Response:
 async def upload(request: Request) -> Response:
     return templates.TemplateResponse(
         "upload.html",
-        {
-            "request": request,
-            "contract_types": CONTRACT_TYPES,
-        },
+        {"request": request, "contract_types": CONTRACT_TYPES},
     )
 
 
@@ -83,7 +98,16 @@ async def analyze(
     if not file.filename:
         raise HTTPException(status_code=400, detail="Файл не выбран")
 
-    suffix = Path(file.filename).suffix
+    suffix = Path(file.filename).suffix.lower()
+
+    # Разрешаем только то, что реально умеем читать
+    if suffix not in {".pdf", ".docx"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Неподдерживаемый формат. Поддерживаются: PDF, DOCX.",
+        )
+
+    # Сохраняем во временный файл
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         content = await file.read()
         tmp.write(content)
@@ -113,6 +137,7 @@ async def report(request: Request, job_id: str) -> Response:
         raise HTTPException(status_code=404, detail="Задача не найдена")
     if job.status != "done" or not job.report:
         raise HTTPException(status_code=409, detail="Отчёт ещё не готов")
+
     context = _render_report_context(job.report)
     context.update({"request": request, "job_id": job_id})
     return templates.TemplateResponse("report.html", context)
@@ -123,6 +148,7 @@ async def report_pdf(job_id: str) -> Response:
     job = storage.get_job(job_id)
     if not job or job.status != "done" or not job.report:
         raise HTTPException(status_code=404, detail="Отчёт не найден")
+
     context = _render_report_context(job.report)
     pdf_bytes = pdf_renderer.render("report.html", context)
     headers = {"Content-Disposition": f"attachment; filename=risq-report-{job_id}.pdf"}
@@ -134,15 +160,15 @@ async def api_job(job_id: str) -> JSONResponse:
     job = storage.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Задача не найдена")
-    payload = {
-        "status": job.status,
-        "step": job.step,
-    }
+
+    payload = {"status": job.status, "step": job.step}
     if job.error:
         payload["error"] = job.error
+
     return JSONResponse(payload)
 
 
 @app.get("/health")
 async def health() -> JSONResponse:
     return JSONResponse({"ok": True})
+

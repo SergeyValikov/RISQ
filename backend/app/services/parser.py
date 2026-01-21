@@ -19,19 +19,37 @@ def parse_pdf(path: Path) -> tuple[str, int]:
         for page in pdf.pages:
             page_text = page.extract_text() or ""
             text_parts.append(page_text)
-    return _truncate("\n".join(text_parts)), pages
+    text = "\n".join(text_parts).strip()
+    return _truncate(text), pages
 
 
 def parse_docx(path: Path) -> tuple[str, int]:
-    document = Document(path)
-    text_parts = [paragraph.text for paragraph in document.paragraphs]
-    text = "\n".join(text_parts)
+    # Word/DOCX: нормальное количество страниц вытащить нельзя -> ставим 1
+    document = Document(str(path))
+
+    parts: list[str] = []
+    for p in document.paragraphs:
+        t = (p.text or "").strip()
+        if t:
+            parts.append(t)
+
+    text = "\n".join(parts).strip()
     return _truncate(text), 1
 
 
 def parse_document(path: Path) -> tuple[str, int]:
-    if path.suffix.lower() == ".pdf":
+    suffix = path.suffix.lower()
+
+    if suffix == ".pdf":
         return parse_pdf(path)
-    if path.suffix.lower() in {".docx", ".doc"}:
+
+    # ВАЖНО: python-docx НЕ читает .doc (старый Word). Только .docx.
+    # Поэтому .doc — сразу ошибка, чтобы было понятно почему не работает.
+    if suffix == ".docx":
         return parse_docx(path)
-    raise ValueError("Неподдерживаемый формат файла")
+
+    if suffix == ".doc":
+        raise ValueError("Формат .doc (старый Word) не поддерживается. Сохрани файл как .docx.")
+
+    raise ValueError("Неподдерживаемый формат файла. Поддерживаются: .pdf, .docx")
+
