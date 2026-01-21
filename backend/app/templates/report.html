@@ -1,156 +1,133 @@
 {% extends "base.html" %}
+
 {% block content %}
 
-<div class="container">
+<!-- Навигация -->
+<div class="card">
+  <div class="nav-actions">
+    <a href="/" class="btn">🏠 На главную</a>
+    <a href="/upload" class="btn btn-primary">📄 Загрузить новый договор</a>
+  </div>
+</div>
 
-  <!-- COVER -->
-  <div class="card card-cover">
-    <div class="cover-header">
-      <div>
-        <div class="cover-label">ОТЧЁТ ПО ДОГОВОРУ</div>
-        <h1>{{ report.cover.contract_type }}</h1>
-        <div class="muted">
-          Дата анализа: {{ report.cover.analysis_date }}
-        </div>
-
-        {% if report.cover.pages %}
-          <div class="muted">Страниц: {{ report.cover.pages }}</div>
-        {% endif %}
-
-        {% if report.cover.chars %}
-          <div class="muted">Символов: {{ report.cover.chars }}</div>
-        {% endif %}
-
-        {% if report.cover.words %}
-          <div class="muted">Слов: {{ report.cover.words }}</div>
-        {% endif %}
+<!-- Обложка отчёта -->
+<div class="card">
+  <div class="report-header">
+    <div>
+      <div class="report-title">ОТЧЁТ ПО ДОГОВОРУ</div>
+      <h1>{{ report.cover.contract_type }}</h1>
+      <div class="muted">
+        Дата анализа: {{ report.cover.analysis_date }}
       </div>
+    </div>
 
-      <div class="cover-status">
-        <strong>{{ report.cover.overall_status }}</strong><br>
-        {% if not for_pdf %}
-          <a href="/report/{{ job_id }}/pdf">Скачать PDF</a>
-        {% endif %}
+    <div class="report-status">
+      <div class="status-badge">
+        {{ report.cover.overall_status }}
       </div>
+      {% if not for_pdf %}
+        <a href="/report/{{ job_id }}/pdf" class="btn-link">Скачать PDF</a>
+      {% endif %}
     </div>
   </div>
 
-  <!-- SUMMARY -->
-  <div class="card">
-    <h2>Резюме</h2>
-    {% if report.summary %}
-      <ul>
-        {% for item in report.summary %}
-          <li>{{ item }}</li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <div class="muted">Резюме отсутствует.</div>
+  <div class="report-meta">
+    {% if report.cover.pages %}
+      <div><strong>Страниц:</strong> {{ report.cover.pages }}</div>
+    {% endif %}
+    {% if report.cover.chars %}
+      <div><strong>Символов:</strong> {{ report.cover.chars }}</div>
     {% endif %}
   </div>
+</div>
 
-  <!-- RISK MAP -->
-  <div class="card">
-    <h2>Карта рисков</h2>
-    {% if report.risk_map %}
+<!-- Резюме -->
+<div class="card">
+  <h2>Резюме</h2>
+  {% if report.summary %}
+    <ul>
+      {% for item in report.summary %}
+        <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="muted">Резюме отсутствует.</div>
+  {% endif %}
+</div>
+
+<!-- Карта рисков -->
+<div class="card">
+  <h2>Карта рисков</h2>
+
+  {% if report.risk_map %}
+    <div class="risk-grid">
       {% for item in report.risk_map %}
         <div class="risk-item">
-          <strong>{{ item.category }}</strong>
-          <p>{{ item.description }}</p>
+          <div class="risk-category">{{ item.category }}</div>
+          <div class="risk-description">{{ item.description }}</div>
           {% if item.clause_ref %}
             <div class="muted">Ссылка: {{ item.clause_ref }}</div>
           {% endif %}
         </div>
       {% endfor %}
-    {% else %}
-      <div class="muted">Нет выделенных рисков.</div>
-    {% endif %}
-  </div>
-
-  <!-- ATYPICAL -->
-  <div class="card">
-    <h2>Нетипичные условия</h2>
-    {% if report.atypical %}
-      {% for item in report.atypical %}
-        <blockquote>
-          {% if item.quote %}
-            “{{ item.quote }}”
-          {% endif %}
-          <div>{{ item.note }}</div>
-        </blockquote>
-      {% endfor %}
-    {% else %}
-      <div class="muted">Нет нетипичных условий.</div>
-    {% endif %}
-  </div>
-
-  <!-- CONTRADICTIONS -->
-  <div class="card">
-    <h2>Противоречия</h2>
-    {% if report.contradictions %}
-      <ul>
-        {% for item in report.contradictions %}
-          <li>
-            {{ item.description }}
-            {% if item.clause_refs %}
-              ({{ item.clause_refs | join(", ") }})
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <div class="muted">Противоречия не обнаружены.</div>
-    {% endif %}
-  </div>
-
-  <!-- DUTIES -->
-  <div class="card">
-    <h2>Баланс обязанностей</h2>
-    <p>Обязанностей заказчика: <strong>{{ report.duties_balance.customer_count }}</strong></p>
-    <p>Обязанностей исполнителя: <strong>{{ report.duties_balance.provider_count }}</strong></p>
-    {% if report.duties_balance.note %}
-      <p class="muted">{{ report.duties_balance.note }}</p>
-    {% endif %}
-  </div>
-
-  <!-- SPECIALIST -->
-  <div class="card">
-    <h2>Требует внимания специалиста</h2>
-    {% if report.needs_specialist %}
-      <ul>
-        {% for item in report.needs_specialist %}
-          <li>
-            {{ item.item }}
-            {% if item.clause_ref %}({{ item.clause_ref }}){% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <div class="muted">Нет пунктов, требующих дополнительной проверки.</div>
-    {% endif %}
-  </div>
-
-  <!-- MISSING -->
-  <div class="card">
-    <h2>Отсутствующие разделы</h2>
-    {% if report.missing_sections %}
-      <ul>
-        {% for item in report.missing_sections %}
-          <li>{{ item }}</li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <div class="muted">Все ключевые разделы присутствуют.</div>
-    {% endif %}
-  </div>
-
-  {% if report.disclaimer %}
-    <div class="card muted">
-      {{ report.disclaimer }}
     </div>
+  {% else %}
+    <div class="muted">Нет выделенных рисков.</div>
   {% endif %}
-
 </div>
 
-{% endblock %}
+<!-- Нетипичные условия -->
+<div class="card">
+  <h2>Нетипичные условия</h2>
+
+  {% if report.atypical %}
+    {% for item in report.atypical %}
+      <div class="quote-block">
+        {% if item.quote %}
+          <div class="quote">“{{ item.quote }}”</div>
+        {% endif %}
+        <div>{{ item.note }}</div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="muted">Нет нетипичных условий.</div>
+  {% endif %}
+</div>
+
+<!-- Противоречия -->
+<div class="card">
+  <h2>Противоречия</h2>
+
+  {% if report.contradictions %}
+    <ul>
+      {% for item in report.contradictions %}
+        <li>
+          {{ item.description }}
+          {% if item.clause_refs %}
+            ({{ item.clause_refs | join(", ") }})
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="muted">Противоречия не обнаружены.</div>
+  {% endif %}
+</div>
+
+<!-- Баланс обязанностей -->
+<div class="card">
+  <h2>Баланс обязанностей</h2>
+
+  <div class="duties-grid">
+    <div class="duties-col">
+      <div class="duties-count">
+        {{ report.duties_balance.customer_count }}
+      </div>
+      <div class="duties-label">
+        обязанностей заказчика
+      </div>
+    </div>
+
+    <div class="duties-col">
+      <div class="duties-cou
 
