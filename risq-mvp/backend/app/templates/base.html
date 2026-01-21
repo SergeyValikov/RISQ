@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RISQ MVP</title>
+    {% if for_pdf %}
+    <link rel="stylesheet" href="style.css" />
+    {% else %}
+    <link rel="stylesheet" href="/static/style.css" />
+    {% endif %}
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <div class="logo">RISQ</div>
+      </header>
+      <main class="content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </body>
+</html>
