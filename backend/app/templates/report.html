@@ -15,15 +15,15 @@
   <div class="report-header">
     <div>
       <div class="report-title">ОТЧЁТ ПО ДОГОВОРУ</div>
-      <h1>{{ report.cover.contract_type }}</h1>
+      <h1>{{ report.cover.contract_type | default('—', true) }}</h1>
       <div class="muted">
-        Дата анализа: {{ report.cover.analysis_date }}
+        Дата анализа: {{ report.cover.analysis_date | default('—', true) }}
       </div>
     </div>
 
     <div class="report-status">
       <div class="status-badge">
-        {{ report.cover.overall_status }}
+        {{ report.cover.overall_status | default('—', true) }}
       </div>
       {% if not for_pdf %}
         <a href="/report/{{ job_id }}/pdf" class="btn-link">Скачать PDF</a>
@@ -32,10 +32,10 @@
   </div>
 
   <div class="report-meta">
-    {% if report.cover.pages %}
+    {% if report.cover.pages is defined and report.cover.pages %}
       <div><strong>Страниц:</strong> {{ report.cover.pages }}</div>
     {% endif %}
-    {% if report.cover.chars %}
+    {% if report.cover.chars is defined and report.cover.chars %}
       <div><strong>Символов:</strong> {{ report.cover.chars }}</div>
     {% endif %}
   </div>
@@ -44,9 +44,10 @@
 <!-- Резюме -->
 <div class="card">
   <h2>Резюме</h2>
-  {% if report.summary %}
+  {% set summary_list = report.summary | default([]) %}
+  {% if summary_list and summary_list|length > 0 %}
     <ul>
-      {% for item in report.summary %}
+      {% for item in summary_list %}
         <li>{{ item }}</li>
       {% endfor %}
     </ul>
@@ -59,13 +60,14 @@
 <div class="card">
   <h2>Карта рисков</h2>
 
-  {% if report.risk_map %}
+  {% set risk_list = report.risk_map | default([]) %}
+  {% if risk_list and risk_list|length > 0 %}
     <div class="risk-grid">
-      {% for item in report.risk_map %}
+      {% for item in risk_list %}
         <div class="risk-item">
-          <div class="risk-category">{{ item.category }}</div>
-          <div class="risk-description">{{ item.description }}</div>
-          {% if item.clause_ref %}
+          <div class="risk-category">{{ item.category | default('—', true) }}</div>
+          <div class="risk-description">{{ item.description | default('', true) }}</div>
+          {% if item.clause_ref is defined and item.clause_ref %}
             <div class="muted">Ссылка: {{ item.clause_ref }}</div>
           {% endif %}
         </div>
@@ -80,13 +82,14 @@
 <div class="card">
   <h2>Нетипичные условия</h2>
 
-  {% if report.atypical %}
-    {% for item in report.atypical %}
+  {% set atypical_list = report.atypical | default([]) %}
+  {% if atypical_list and atypical_list|length > 0 %}
+    {% for item in atypical_list %}
       <div class="quote-block">
-        {% if item.quote %}
+        {% if item.quote is defined and item.quote %}
           <div class="quote">“{{ item.quote }}”</div>
         {% endif %}
-        <div>{{ item.note }}</div>
+        <div>{{ item.note | default('', true) }}</div>
       </div>
     {% endfor %}
   {% else %}
@@ -98,12 +101,13 @@
 <div class="card">
   <h2>Противоречия</h2>
 
-  {% if report.contradictions %}
+  {% set contradictions_list = report.contradictions | default([]) %}
+  {% if contradictions_list and contradictions_list|length > 0 %}
     <ul>
-      {% for item in report.contradictions %}
+      {% for item in contradictions_list %}
         <li>
-          {{ item.description }}
-          {% if item.clause_refs %}
+          {{ item.description | default('', true) }}
+          {% if item.clause_refs is defined and item.clause_refs %}
             ({{ item.clause_refs | join(", ") }})
           {% endif %}
         </li>
@@ -118,16 +122,66 @@
 <div class="card">
   <h2>Баланс обязанностей</h2>
 
+  {% set db = report.duties_balance | default({}) %}
   <div class="duties-grid">
     <div class="duties-col">
-      <div class="duties-count">
-        {{ report.duties_balance.customer_count }}
-      </div>
-      <div class="duties-label">
-        обязанностей заказчика
-      </div>
+      <div class="duties-count">{{ db.customer_count | default(0, true) }}</div>
+      <div class="duties-label">обязанностей заказчика</div>
     </div>
 
     <div class="duties-col">
-      <div class="duties-cou
+      <div class="duties-count">{{ db.provider_count | default(0, true) }}</div>
+      <div class="duties-label">обязанностей исполнителя</div>
+    </div>
+  </div>
+
+  {% if db.note is defined and db.note %}
+    <div class="muted" style="margin-top: 10px;">{{ db.note }}</div>
+  {% endif %}
+</div>
+
+<!-- Рекомендации -->
+<div class="card">
+  <h2>Рекомендации</h2>
+
+  {% set recs = report.recommendations | default([]) %}
+  {% if recs and recs|length > 0 %}
+    <ul>
+      {% for item in recs %}
+        <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="muted">Рекомендации отсутствуют.</div>
+  {% endif %}
+</div>
+
+<!-- Детальные замечания -->
+<div class="card">
+  <h2>Детальные замечания</h2>
+
+  {% set findings = report.findings | default([]) %}
+  {% if findings and findings|length > 0 %}
+    {% for f in findings %}
+      <div class="risk-item" style="margin-bottom:12px;">
+        {% if f.title is defined and f.title %}
+          <div class="risk-category">{{ f.title }}</div>
+        {% endif %}
+        <div class="risk-description">{{ f.text | default('', true) }}</div>
+
+        {% if f.severity is defined and f.severity %}
+          <div class="muted">Уровень: {{ f.severity }}</div>
+        {% endif %}
+
+        {% if f.clause_ref is defined and f.clause_ref %}
+          <div class="muted">Ссылка: {{ f.clause_ref }}</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="muted">Детальные замечания отсутствуют.</div>
+  {% endif %}
+</div>
+
+{% endblock %}
 
